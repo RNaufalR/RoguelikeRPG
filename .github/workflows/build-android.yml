@@ -30,10 +30,40 @@ jobs:
           java-version: '17'
           cache: gradle
 
+      - name: Show java and javac versions
+        run: |
+          java -version
+          javac -version
+
       - name: Initialize Android platform
         run: |
           npx cap add android
           npx cap sync android
+
+      - name: Force Java 17 in generated Android Gradle files
+        # Make sure any generated build.gradle / build.gradle.kts files that mention Java 21 are changed to 17,
+        # and replace Kotlin jvmTarget "21" -> "17".
+        run: |
+          set -e
+          # only operate if android directory exists
+          if [ -d "android" ]; then
+            echo "Patching Android Gradle files to use Java 17..."
+            # replace textual occurrences - safe no-op if not present
+            find android -type f \( -name "build.gradle" -o -name "build.gradle.kts" -o -name "*.gradle" -o -name "*.kts" \) -print0 \
+              | xargs -0 -n1 sed -i \
+                -e 's/JavaVersion\.VERSION_21/JavaVersion.VERSION_17/g' \
+                -e 's/sourceCompatibility = 21/sourceCompatibility = 17/g' \
+                -e 's/targetCompatibility = 21/targetCompatibility = 17/g' \
+                -e 's/sourceCompatibility = JavaVersion.VERSION_21/sourceCompatibility = JavaVersion.VERSION_17/g' \
+                -e 's/targetCompatibility = JavaVersion.VERSION_21/targetCompatibility = JavaVersion.VERSION_17/g' \
+                -e 's/jvmTarget = "21"/jvmTarget = "17"/g' \
+                -e "s/jvmTarget = '21'/jvmTarget = '17'/g" \
+                -e 's/kotlinOptions.jvmTarget = "21"/kotlinOptions.jvmTarget = "17"/g' \
+                -e "s/kotlinOptions.jvmTarget = '21'/kotlinOptions.jvmTarget = '17'/g" || true
+            echo "Patch completed."
+          else
+            echo "No android directory found — skipping patch step."
+          fi
 
       - name: Build debug APK
         working-directory: android
@@ -44,4 +74,3 @@ jobs:
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          
